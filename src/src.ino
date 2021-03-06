@@ -26,7 +26,9 @@ SSD1306  display(0x3c, 4, 15, GEOMETRY_128_64);                // ADDRESS, SDA, 
 #define _VERSION          0.01
 #define BLE_SERVICE_NAME "WR S4BL3"           // name of the Bluetooth Service 
 
-#define VBATPIN A7                            // aka D9 chip pint with a double 100k reistance (already included)
+#define BATPIN 33                            
+#define MinADC 372
+#define MaxADC 489 
 
 #define SerialDebug Serial                   // Usb is used by S4, additionnal port on SAMD21
       
@@ -55,6 +57,25 @@ BLECharacteristic * pCharacteristic27;
 BLECharacteristic * pCharacteristic28;
 BLECharacteristic * pCharacteristic29;
 
+/*
+BLECharacteristic * pCharacteristicMEAS;
+BLECharacteristic * pCharacteristicSENS;
+BLECharacteristic * pCharacteristicCTRL;
+BLECharacteristic * pCharacteristicFEAT;
+BLECharacteristic * pCharacteristicBATT;
+
+// Cycling Speed and Cadence configuration 
+#define     GATT_CSC_UUID                           0x1816
+#define     GATT_CSC_MEASUREMENT_UUID               0x2A5B
+#define     GATT_CSC_FEATURE_UUID                   0x2A5C
+#define     GATT_SENSOR_LOCATION_UUID               0x2A5D
+#define     GATT_SC_CONTROL_POINT_UUID              0x2A55
+// Device Information configuration
+#define     GATT_DEVICE_INFO_UUID                   0x180A
+#define     GATT_MANUFACTURER_NAME_UUID             0x2A29
+#define     GATT_MODEL_NUMBER_UUID                  0x2A24
+#define     BLE_SIG_UUID_BATTERY_SVC                0x180F
+*/
 
 bool deviceConnected = false;
 bool oldDeviceConnected = false;
@@ -196,6 +217,7 @@ int stage = 0; // sets case for what parameter to be displayed
 int rotation = 0;
 int strokes = 0;
 int trend = 0;
+int battery = 0;
 
 /*
 struct s4MemoryMap{
@@ -242,22 +264,24 @@ class MyCallbacks: public BLECharacteristicCallbacks {
 };
 
 void initBLE(){
-  /* Initialise the module */
+  // Initialise the module 
   SerialDebug.print(F("Init BLE:"));
   // Create the BLE Device
   BLEDevice::init(BLE_SERVICE_NAME);
+  //BLEDevice::init("WAHOO BLUESC");
+  
   // Create the BLE Server
   BLEServer *pServer = BLEDevice::createServer();
   pServer->setCallbacks(new MyServerCallbacks());
   
-  /* Add the Fitness Machine Service definition */
-  /* Service ID should be 1 */
+  // Add the Fitness Machine Service definition 
+  // Service ID should be 1 
   SerialDebug.println(F("Adding the Fitness Machine Service definition (UUID = 0x1826): "));
   // Create the BLE Service
   BLEService *pService = pServer->createService(BLEUUID((uint16_t)FitnessMachineService));
 
-  /* Add the Fitness Machine Rower Data characteristic */
-  /* Chars ID for Measurement should be 1 */
+  // Add the Fitness Machine Rower Data characteristic 
+  // Chars ID for Measurement should be 1 
     pDtCharacteristic = pService->createCharacteristic(
           BLEUUID((uint16_t)FitnessMachineRowerData),
           BLECharacteristic::PROPERTY_NOTIFY
@@ -271,7 +295,7 @@ void initBLE(){
           );
     pFmfCharacteristic->addDescriptor(new BLE2902());
 
-    /* Add the Fitness Machine Control Point characteristic */
+    // Add the Fitness Machine Control Point characteristic 
     pCtrCharacteristic = pService->createCharacteristic(
           BLEUUID((uint16_t)FitnessMachineControlPoint),
           BLECharacteristic::PROPERTY_WRITE 
@@ -279,22 +303,23 @@ void initBLE(){
     pCtrCharacteristic->addDescriptor(new BLE2902());
     pCtrCharacteristic->setCallbacks(new MyCallbacks());
 
-    /* Add the Fitness Machine Status characteristic */
-    pStCharacteristic = pService->createCharacteristic(
-          BLEUUID((uint16_t)FitnessMachineStatus),
-          BLECharacteristic::PROPERTY_NOTIFY
-          );
-    pStCharacteristic->addDescriptor(new BLE2902());
-
     pBatCharacteristic = pService->createCharacteristic(
           BLEUUID((uint16_t)batteryLevel),
           BLECharacteristic::PROPERTY_NOTIFY
           );
     pBatCharacteristic->addDescriptor(new BLE2902());
 
+    // Add the Fitness Machine Status characteristic 
+    pStCharacteristic = pService->createCharacteristic(
+          BLEUUID((uint16_t)FitnessMachineStatus),
+          BLECharacteristic::PROPERTY_NOTIFY
+          );
+    pStCharacteristic->addDescriptor(new BLE2902());
+
   // Start the service
   pService->start();
 
+ 
   //-------------------------------------------------------------------------------------
   BLEService *pService2 = pServer->createService(BLEUUID((uint16_t)DEVICE_INFORMATION));
   pCharacteristic24 = pService2->createCharacteristic(
@@ -340,18 +365,55 @@ void initBLE(){
   cRower[6]=0x00;
   cRower[7]=0x00;
   pFmfCharacteristic->setValue((uint8_t* )cRower, 8);
-  //------------------------------------------------------------------------------------- 
- 
-  
+
+
+//--------------------------------------------------------------------------------------------------------
+/*
+  BLEService *pService3 = pServer->createService(BLEUUID((uint16_t)GATT_CSC_UUID));
+  pCharacteristicMEAS = pService3->createCharacteristic(
+    BLEUUID((uint16_t)GATT_CSC_MEASUREMENT_UUID),
+    BLECharacteristic::PROPERTY_NOTIFY
+    );
+  pCharacteristicMEAS->addDescriptor(new BLE2902());
+  pCharacteristicSENS = pService3->createCharacteristic(
+    BLEUUID((uint16_t)GATT_SENSOR_LOCATION_UUID),
+    BLECharacteristic::PROPERTY_READ
+    );
+  pCharacteristicCTRL = pService3->createCharacteristic(
+    BLEUUID((uint16_t)GATT_SC_CONTROL_POINT_UUID),
+    BLECharacteristic::PROPERTY_INDICATE | BLECharacteristic::PROPERTY_WRITE
+    );
+  pCharacteristicCTRL->addDescriptor(new BLE2902());
+  pCharacteristicFEAT = pService3->createCharacteristic(
+    BLEUUID((uint16_t)GATT_CSC_FEATURE_UUID),
+    BLECharacteristic::PROPERTY_READ
+    );
+  pService3->start();
+
+  BLEService *pService4 = pServer->createService(BLEUUID((uint16_t)BLE_SIG_UUID_BATTERY_SVC));
+  pCharacteristicBATT = pService4->createCharacteristic(
+    BLEUUID((uint16_t)0x180F),
+    BLECharacteristic::PROPERTY_NOTIFY
+    );
+  pCharacteristicBATT->addDescriptor(new BLE2902());
+  pService4->start();
+*/
+//--------------------------------------------------------------------------------------------------------
+
   // Start advertising
   SerialDebug.println(F("Adding Fitness Machine Service UUID to the advertising payload "));
   BLEAdvertising *pAdvertising = pServer->getAdvertising();
   BLEAdvertisementData oAdvertisementData;
   oAdvertisementData.addData(std::string{ 0x02, 0x01, 0x06, 0x05, 0x02, 0x26, 0x18, 0x0a, 0x18});
+  //oAdvertisementData.addData(std::string{ 0x01, 0xFC});
   pAdvertising->setScanResponse(true);
   pAdvertising->setAdvertisementData(oAdvertisementData);
 
-  pAdvertising->start();
+  //pAdvertising->addServiceUUID(BLEUUID((uint16_t)GATT_CSC_UUID));
+  pAdvertising->addServiceUUID(BLEUUID((uint16_t)FitnessMachineService));
+  //pAdvertising->setAppearance(833);
+  //pAdvertising->setAppearance(1154); //BLE_APPEARANCE_CYCLING_SPEED_SENSOR
+  BLEDevice::startAdvertising();
 
   bleInitFlag=true;
   SerialDebug.println();
@@ -465,6 +527,8 @@ void setCxLightRowerData(){
 void setCxRowerData(){
   // Due the size limitation of the message in the BLE Stack of the NRF
   // the message will be split in 2 parts with the according Bitfield (read the spec :) )
+  // rowerDataFlagsP1=0b0000011111110 = 0xFE
+  // rowerDataFlagsP2=0b1111100000001 = 0x1F01
  
   char cRower[19]; // P1 is the biggest part whereas P2 is 13
   
@@ -535,7 +599,7 @@ void setCxBattery(){
     SerialDebug.printf("sendBleBattery() start");
   #endif
   char hexBat[2];
-  int batteryLevelPercent = 35;
+  int batteryLevelPercent = round(battery * 100 / 127);
   /*
   float measuredVbat = analogRead(VBATPIN);
   measuredVbat *= 2;    // we divided by 2, so multiply back
@@ -782,6 +846,9 @@ void displayTime()
   display.setFont(Roboto_Slab_Bold_36);
   display.setTextAlignment(TEXT_ALIGN_LEFT);
   display.drawString(0, 26, str);
+
+  display.fillRect(0, 0, 2, 4);
+  display.fillRect(128 - battery, 0, 128, 4);
 }
 
 void setup() {
@@ -814,6 +881,10 @@ void setup() {
   mps_RA.clear(); // explicitly start clean
   pinMode(ROWERINPUT, INPUT_PULLUP);
   pinMode(BUTTONSPIN, INPUT);
+  battery = map(analogRead(BATPIN), MinADC, MaxADC, 0, 127);
+  if (battery > 127) battery = 127;
+  if (battery < 0) battery = 0;
+
   //digitalWrite(ROWERINPUT, HIGH);
   delay(500);
   attachInterrupt(ROWERINPUT, rowerdebounceinterrupt, CHANGE);
@@ -860,10 +931,11 @@ void rowing() {
 
       if (deviceConnected) {        //** Send a value to protopie. The value is in txValue **//
         //Why coxswain need this notify for start???
-        char cRower[2];
-        cRower[0]=0x00;
+        char cRower[3];
+        cRower[0]=0x01;
         cRower[1]=0x00;
-        pDtCharacteristic->setValue((uint8_t* )cRower, 2);
+        cRower[2]=0x00;
+        pDtCharacteristic->setValue((uint8_t* )cRower, 3);
         pDtCharacteristic->notify();
                 
         //cRower[0]=0x04;
@@ -898,6 +970,13 @@ void rowing() {
         SerialDebug.println("start advertising");
         oldDeviceConnected = deviceConnected;
       }
+
+      //battery 3.2 - 4.2V
+      int batt = map(analogRead(BATPIN), MinADC, MaxADC, 0, 127);
+      if (batt > 127) batt = 127;
+      if (batt < 0) batt = 0;
+      battery = round((float)(4*battery + batt)/5);
+      //SerialDebug.println(String(analogRead(BATPIN)) + " batt: "+ String(batt)+ " battery: "+ String(battery));
 
     }
     
