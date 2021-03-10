@@ -23,12 +23,12 @@
 SSD1306  display(0x3c, 4, 15, GEOMETRY_128_64);                // ADDRESS, SDA, SCL, GEOMETRY_128_32 (or 128_64)
 
 // Global Define 
-#define _VERSION          0.01
+#define _VERSION          0.03
 #define BLE_SERVICE_NAME "WR S4BL3"           // name of the Bluetooth Service 
 
 #define BATPIN 33                            
-#define MinADC 372
-#define MaxADC 489 
+#define MinADC 1095 
+#define MaxADC 1437
 
 #define SerialDebug Serial                   // Usb is used by S4, additionnal port on SAMD21
       
@@ -56,26 +56,6 @@ BLECharacteristic * pCharacteristic26;
 BLECharacteristic * pCharacteristic27;
 BLECharacteristic * pCharacteristic28;
 BLECharacteristic * pCharacteristic29;
-
-/*
-BLECharacteristic * pCharacteristicMEAS;
-BLECharacteristic * pCharacteristicSENS;
-BLECharacteristic * pCharacteristicCTRL;
-BLECharacteristic * pCharacteristicFEAT;
-BLECharacteristic * pCharacteristicBATT;
-
-// Cycling Speed and Cadence configuration 
-#define     GATT_CSC_UUID                           0x1816
-#define     GATT_CSC_MEASUREMENT_UUID               0x2A5B
-#define     GATT_CSC_FEATURE_UUID                   0x2A5C
-#define     GATT_SENSOR_LOCATION_UUID               0x2A5D
-#define     GATT_SC_CONTROL_POINT_UUID              0x2A55
-// Device Information configuration
-#define     GATT_DEVICE_INFO_UUID                   0x180A
-#define     GATT_MANUFACTURER_NAME_UUID             0x2A29
-#define     GATT_MODEL_NUMBER_UUID                  0x2A24
-#define     BLE_SIG_UUID_BATTERY_SVC                0x180F
-*/
 
 bool deviceConnected = false;
 bool oldDeviceConnected = false;
@@ -179,9 +159,10 @@ const int BUTTONSPIN = 0;
 
 /*-----------------CONSTANTS-------------------------------*/
 //const float Ratio = 4.8; // from old script 4.8; meters per rpm = circumference of rotor (D=34cm) -> 1,068m -> Ratio = 0.936 ; WaterRower 7,3 m/St. -> Ratio: 3.156
-const float Ratio = 0.8;
+//const float Ratio = 0.79; //one magnet
+const float Ratio = 3.156;
 
-RunningAverage stm_RA(30); // size of array for strokes/min
+RunningAverage stm_RA(20); // size of array for strokes/min
 RunningAverage mps_RA(5); // size of array for meters/second -> emulates momentum of boat
 
 /*-----------------VARIABLES-----------------------------*/
@@ -218,19 +199,6 @@ int rotation = 0;
 int strokes = 0;
 int trend = 0;
 int battery = 0;
-
-/*
-struct s4MemoryMap{
-  char  desc[32];
-  char  addr[4]; // 3+1
-  char  msize[2]; //1+1
-  int * kpi; // void cause can be in or lon int
-  int base; // 10 for Decimal, 16 for Hex used by strtol
-};
-
-#define S4SIZE 9
-struct s4MemoryMap s4mmap[S4SIZE]; 
-*/
 
 class MyServerCallbacks: public BLEServerCallbacks {
     void onConnect(BLEServer* pServer) {
@@ -321,6 +289,7 @@ void initBLE(){
 
  
   //-------------------------------------------------------------------------------------
+
   BLEService *pService2 = pServer->createService(BLEUUID((uint16_t)DEVICE_INFORMATION));
   pCharacteristic24 = pService2->createCharacteristic(
     BLEUUID((uint16_t)0x2A24),
@@ -366,38 +335,6 @@ void initBLE(){
   cRower[7]=0x00;
   pFmfCharacteristic->setValue((uint8_t* )cRower, 8);
 
-
-//--------------------------------------------------------------------------------------------------------
-/*
-  BLEService *pService3 = pServer->createService(BLEUUID((uint16_t)GATT_CSC_UUID));
-  pCharacteristicMEAS = pService3->createCharacteristic(
-    BLEUUID((uint16_t)GATT_CSC_MEASUREMENT_UUID),
-    BLECharacteristic::PROPERTY_NOTIFY
-    );
-  pCharacteristicMEAS->addDescriptor(new BLE2902());
-  pCharacteristicSENS = pService3->createCharacteristic(
-    BLEUUID((uint16_t)GATT_SENSOR_LOCATION_UUID),
-    BLECharacteristic::PROPERTY_READ
-    );
-  pCharacteristicCTRL = pService3->createCharacteristic(
-    BLEUUID((uint16_t)GATT_SC_CONTROL_POINT_UUID),
-    BLECharacteristic::PROPERTY_INDICATE | BLECharacteristic::PROPERTY_WRITE
-    );
-  pCharacteristicCTRL->addDescriptor(new BLE2902());
-  pCharacteristicFEAT = pService3->createCharacteristic(
-    BLEUUID((uint16_t)GATT_CSC_FEATURE_UUID),
-    BLECharacteristic::PROPERTY_READ
-    );
-  pService3->start();
-
-  BLEService *pService4 = pServer->createService(BLEUUID((uint16_t)BLE_SIG_UUID_BATTERY_SVC));
-  pCharacteristicBATT = pService4->createCharacteristic(
-    BLEUUID((uint16_t)0x180F),
-    BLECharacteristic::PROPERTY_NOTIFY
-    );
-  pCharacteristicBATT->addDescriptor(new BLE2902());
-  pService4->start();
-*/
 //--------------------------------------------------------------------------------------------------------
 
   // Start advertising
@@ -450,8 +387,8 @@ void setCxLightRowerData(){
 #endif
   // This function is a subset of field to be sent in one piece
   // An alternative to the sendBleData()
-  uint16_t  rowerDataFlags=0b0000001111110;
-
+  uint16_t  rowerDataFlags=0b0000001111110; //0x7E
+  
   // 0000000000001 - 1   - 0x001 + More Data 0 <!> WARNINNG <!> This Bit is working the opposite way, 0 means field is present, 1 means not present
   // 0000000000010 - 2   - 0x002 + Average Stroke present
   // 0000000000100 - 4   - 0x004 + Total Distance Present
@@ -697,9 +634,9 @@ void IRAM_ATTR calcrpm() {
   rpm = 60000 / (click_time - last_click_time);
   last_click_time = click_time;
   accel = rpm - old_rpm;
-  if ((accel > 3) && (puffer == 0)){ // > 5 to eliminate micro "acceleration" due to splashing water
+  if ((accel > 15) && (puffer == 0)){ // > 15 to eliminate micro "acceleration" due to splashing water (3 for one magnet)
     strokes ++;
-    puffer = 3; // prevents counting two strokes due to still accelerating rotor
+    puffer = 15; // prevents counting two strokes due to still accelerating rotor
   }
   if (puffer > 0){
     puffer --;
