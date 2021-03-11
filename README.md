@@ -6,7 +6,7 @@ The project was created on the basis of the ESP32 board (Heletec WiFi Kit 32 - c
 ![alt tag](https://raw.githubusercontent.com/zpukr/ArduRower/main/Coxswain.jpg)
 ![alt tag](https://raw.githubusercontent.com/zpukr/ArduRower/main/kinomap.jpg)
 
-It is possible to write directly to the garmin connect using the Connect IQ DataField **ArduRower-IQ** (not yet released, it will be open for public access after testing) 
+It is possible to write directly to the garmin connect using the Connect IQ DataField **ArduRower-IQ** https://apps.garmin.com/en-US/apps/0e10bae1-9753-4915-b856-040d0cbdd82a 
 
 ![alt tag](https://raw.githubusercontent.com/zpukr/ArduRower/main/garmin.jpg)
 ![alt tag](https://raw.githubusercontent.com/zpukr/ArduRower/main/garmin_connect.jpg)
