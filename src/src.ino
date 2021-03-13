@@ -23,7 +23,7 @@
 SSD1306  display(0x3c, 4, 15, GEOMETRY_128_64);                // ADDRESS, SDA, SCL, GEOMETRY_128_32 (or 128_64)
 
 // Global Define 
-#define _VERSION          0.03
+#define _VERSION          0.04
 #define BLE_SERVICE_NAME "WR S4BL3"           // name of the Bluetooth Service 
 
 #define BATPIN 33                            
@@ -634,9 +634,9 @@ void IRAM_ATTR calcrpm() {
   rpm = 60000 / (click_time - last_click_time);
   last_click_time = click_time;
   accel = rpm - old_rpm;
-  if ((accel > 15) && (puffer == 0)){ // > 15 to eliminate micro "acceleration" due to splashing water (3 for one magnet)
+  if ((accel > 20) && (puffer == 0)){ // > 20 to eliminate micro "acceleration" due to splashing water (3 for one magnet)
     strokes ++;
-    puffer = 15; // prevents counting two strokes due to still accelerating rotor
+    puffer = 20; // prevents counting two strokes due to still accelerating rotor
   }
   if (puffer > 0){
     puffer --;
@@ -780,12 +780,13 @@ void displayTime()
   }
   str = str + String((int)round(s));
 
-  display.setFont(Roboto_Slab_Bold_36);
+  display.setFont(Roboto_Slab_Bold_38);
   display.setTextAlignment(TEXT_ALIGN_LEFT);
-  display.drawString(0, 26, str);
+  display.drawString(0, 24, str);
 
   display.fillRect(0, 0, 2, 4);
   display.fillRect(128 - battery, 0, 128, 4);
+
 }
 
 void setup() {
@@ -797,12 +798,6 @@ void setup() {
   SerialDebug.println(_VERSION);
   SerialDebug.println(" ***********************************/");
   
-  initBLE();
-
-  currentTime=millis();
-  previousTime=millis();
-  initBleData();
-
   // Start the OLED Display
   display.init();
   display.setFont(ArialMT_Plain_16);
@@ -813,6 +808,11 @@ void setup() {
   display.setTextAlignment(TEXT_ALIGN_CENTER);
   display.drawString(64, 4, "ArduRower");
   display.display();
+
+  initBLE();
+  currentTime=millis();
+  previousTime=millis();
+  initBleData();
 
   stm_RA.clear(); // explicitly start clean
   mps_RA.clear(); // explicitly start clean
@@ -920,20 +920,20 @@ void rowing() {
     display.clear();
     display.setFont(ArialMT_Plain_10);
     display.setTextAlignment(TEXT_ALIGN_LEFT);
-    display.drawString(5, 24, "meters");
+    display.drawString(5, 23, "meters");
     //display.drawString(24, 53, "time");
-    display.drawString(100, 24, "m/s");
-    display.drawString(98, 53, "str/min"); 
+    display.drawString(100, 23, "m/s");
+    display.drawString(102, 53, "st/min"); 
 
     // set time display
     displayTime();
 
-    display.setFont(Roboto_Slab_Bold_24);
+    display.setFont(Roboto_Slab_Bold_27);
     display.setTextAlignment(TEXT_ALIGN_RIGHT);
-    display.drawString(128, 28, String(round((spm + old_spm)/2), 0));
-    display.drawString(128, 0, String(Ms, 2)); // "m/s"
+    display.drawString(128, 26, String(round((spm + old_spm)/2), 0));
+    display.drawString(128, -3, String(Ms, 2)); // "m/s"
     display.setTextAlignment(TEXT_ALIGN_LEFT);
-    display.drawString(0, 0, String(meters, DEC)); //"s/m" 
+    display.drawString(0, -3, String(meters, DEC)); //"m" 
 
 
     /* if select button is pressed reset */
