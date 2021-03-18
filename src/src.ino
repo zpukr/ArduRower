@@ -5,6 +5,9 @@
 #include <BLE2902.h>
 #include "RunningAverage.h" // https://github.com/RobTillaart/Arduino/tree/master/libraries/RunningAverage
 
+//#include "esp_bt_main.h"
+//#include "esp_gap_bt_api.h"
+
 #include "SSD1306.h"
 #include "font.h" //// Created by http://oleddisplay.squix.ch/
 
@@ -208,6 +211,7 @@ class MyServerCallbacks: public BLEServerCallbacks {
     void onDisconnect(BLEServer* pServer) {
       deviceConnected = false;
       SerialDebug.println("DISCONNECTED");
+      
     }
 };
 
@@ -809,6 +813,15 @@ void setup() {
   display.drawString(64, 4, "ArduRower");
   display.display();
 
+  /*
+  esp_bt_controller_config_t bt_cfg = BT_CONTROLLER_INIT_CONFIG_DEFAULT();
+  if (esp_bt_controller_init(&bt_cfg) != ESP_OK)
+    SerialDebug.println( "Bluetooth controller initialize failed");
+  else  
+    SerialDebug.println( "BT init succeess" );
+  esp_bt_controller_enable(ESP_BT_MODE_BLE);
+  */
+  
   initBLE();
   currentTime=millis();
   previousTime=millis();
@@ -906,6 +919,8 @@ void rowing() {
         pServer->startAdvertising(); // restart advertising
         SerialDebug.println("start advertising");
         oldDeviceConnected = deviceConnected;
+        clicks = 0;
+        break;
       }
 
       //battery 3.2 - 4.2V
