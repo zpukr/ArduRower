@@ -26,7 +26,7 @@
 SSD1306  display(0x3c, 4, 15, GEOMETRY_128_64);                // ADDRESS, SDA, SCL, GEOMETRY_128_32 (or 128_64)
 
 // Global Define 
-#define _VERSION          0.04
+#define _VERSION          0.05
 #define BLE_SERVICE_NAME "WR S4BL3"           // name of the Bluetooth Service 
 
 #define BATPIN 33                            
@@ -165,8 +165,9 @@ const int BUTTONSPIN = 0;
 //const float Ratio = 0.79; //one magnet
 const float Ratio = 3.156;
 
-RunningAverage stm_RA(20); // size of array for strokes/min
-RunningAverage mps_RA(5); // size of array for meters/second -> emulates momentum of boat
+RunningAverage stm_RA(21); // size of array for strokes/min
+RunningAverage mps_RA(7); // size of array for meters/second -> emulates momentum of boat
+RunningAverage battery_RA(20);
 
 /*-----------------VARIABLES-----------------------------*/
 long start;
@@ -196,12 +197,11 @@ volatile int meters_old = 0;
 //volatile int trigger = 0;
 unsigned long timer1 = 0;
 unsigned long timer2 = 0;
-unsigned long timer3 = 0;
 int stage = 0; // sets case for what parameter to be displayed
 int rotation = 0;
 int strokes = 0;
 int trend = 0;
-int battery = 0;
+
 
 class MyServerCallbacks: public BLEServerCallbacks {
     void onConnect(BLEServer* pServer) {
@@ -540,7 +540,7 @@ void setCxBattery(){
     SerialDebug.printf("sendBleBattery() start");
   #endif
   char hexBat[2];
-  int batteryLevelPercent = round(battery * 100 / 127);
+  int batteryLevelPercent = round(battery_RA.getAverage() * 100 / 127);
   /*
   float measuredVbat = analogRead(VBATPIN);
   measuredVbat *= 2;    // we divided by 2, so multiply back
@@ -567,9 +567,9 @@ void setCxBattery(){
 void row_start() {
   display.clear();
   display.setColor(WHITE);
-  display.setFont(ArialMT_Plain_16);
+  display.setFont(ArialMT_Plain_24);
   display.setTextAlignment(TEXT_ALIGN_CENTER);
-  display.drawString(64, 12, "Waiting");
+  display.drawString(64, 10, "Waiting");
   display.drawString(64, 34, "for start");
   display.display();
   delay(100);
@@ -720,7 +720,6 @@ void reset() {
   Ms = 0;
   timer1 = 0;
   timer2 = 0;
-  timer3 = 0;
   start = millis();
   old_split = millis();
   strokes = 0;
@@ -789,7 +788,7 @@ void displayTime()
   display.drawString(0, 24, str);
 
   display.fillRect(0, 0, 2, 4);
-  display.fillRect(128 - battery, 0, 128, 4);
+  display.fillRect(128 - battery_RA.getAverage(), 0, 128, 4);
 
 }
 
@@ -829,48 +828,47 @@ void setup() {
 
   stm_RA.clear(); // explicitly start clean
   mps_RA.clear(); // explicitly start clean
+  battery_RA.clear();
   pinMode(ROWERINPUT, INPUT_PULLUP);
   pinMode(BUTTONSPIN, INPUT);
-  battery = map(analogRead(BATPIN), MinADC, MaxADC, 0, 127);
+  int battery = map(analogRead(BATPIN), MinADC, MaxADC, 0, 127);
   if (battery > 127) battery = 127;
   if (battery < 0) battery = 0;
+  for (int i = 1; i < battery_RA.getSize(); i++) {
+     battery_RA.addValue(battery);
+  }
 
   //digitalWrite(ROWERINPUT, HIGH);
   delay(500);
   attachInterrupt(ROWERINPUT, rowerdebounceinterrupt, CHANGE);
   timer1 = millis();
   timer2 = millis();
-  timer3 = millis();
   reset();
 }
 
 void rowing() {
-  String str ="";
   while (read_LCD_buttons() != btnLEFT) {
     // prints the variable parameter as selected by keypad
     // variableParameter();
 
-    /* calculate meters/min*/
-    if ((millis() - timer1) > 1000) {
-      Ms = calcmetersmin();
-      //Serial.println(Ms);
-      timer1 = millis();
-      //lcd.clear();
-    }
     /*calculate split times every 500m*/
     if ((meters % 500) == 0 && meters > 0 ) {
-      if ((millis() - timer2) > 1000) {
+      timer2 = millis();
+      if ((millis() - timer2) >= 1000) {
         split();
         //lcd.clear();
       }
-      timer2 = millis();
     }
-    /*calculate moving average of strokes/min*/
-    if ((millis() - timer3) > 1000) {
+    
+    if ((millis() - timer1) >= 1000) {
+      timer1 = millis();
+      /* calculate meters/min*/
+      Ms = calcmetersmin();
+      //Serial.println(Ms);
+      /*calculate moving average of strokes/min*/
       old_spm = (int)spm;
       calcstmra();
       spm = stm_RA.getAverage()*60;
-      timer3 = millis();
 
       // connecting
       if (deviceConnected && !oldDeviceConnected) {
@@ -927,7 +925,7 @@ void rowing() {
       int batt = map(analogRead(BATPIN), MinADC, MaxADC, 0, 127);
       if (batt > 127) batt = 127;
       if (batt < 0) batt = 0;
-      battery = round((float)(4*battery + batt)/5);
+      battery_RA.addValue(batt);
       //SerialDebug.println(String(analogRead(BATPIN)) + " batt: "+ String(batt)+ " battery: "+ String(battery));
 
     }
