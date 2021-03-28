@@ -167,7 +167,7 @@ const float Ratio = 3.156;
 
 RunningAverage stm_RA(21); // size of array for strokes/min
 RunningAverage mps_RA(7); // size of array for meters/second -> emulates momentum of boat
-RunningAverage battery_RA(20);
+RunningAverage battery_RA(40);
 
 /*-----------------VARIABLES-----------------------------*/
 long start;
@@ -201,12 +201,14 @@ int stage = 0; // sets case for what parameter to be displayed
 int rotation = 0;
 int strokes = 0;
 int trend = 0;
+int resetTimer = 0;
 
 
 class MyServerCallbacks: public BLEServerCallbacks {
     void onConnect(BLEServer* pServer) {
       deviceConnected = true;
       SerialDebug.println("CONNECTED");
+      resetTimer = 0;
     };
     void onDisconnect(BLEServer* pServer) {
       deviceConnected = false;
@@ -730,6 +732,7 @@ void reset() {
   stm_RA.clear();
   mps_RA.clear();
   trend = 0;
+  resetTimer = 0;
   //lcd.clear();
 }
 
@@ -761,7 +764,7 @@ int read_LCD_buttons()
   */
 }
 
-void displayTime()
+void displayTimeBattery()
 {
   float h,m,s;
   unsigned long over;
@@ -777,30 +780,31 @@ void displayTime()
   if (m < 10){
     str = str + "0";
   }
-  str = str + String((int)round(m)) + ':';
-  if (s < 10){
-     str = str + "0";
+  str = str + String((int)round(m));
+
+  if (int(h) == 0) {
+    str = str + ':';
+    if (s < 10){
+       str = str + "0";
+    }
+    str = str + String((int)round(s));
   }
-  str = str + String((int)round(s));
 
   display.setFont(Roboto_Slab_Bold_38);
   display.setTextAlignment(TEXT_ALIGN_LEFT);
   display.drawString(0, 24, str);
 
-  display.fillRect(0, 0, 2, 4);
+  display.fillRect(0, 0, 2, 5);
+  display.fillRect(31, 0, 2, 5);
+  display.fillRect(63, 0, 2, 5);
+  display.fillRect(95, 0, 2, 5);
+  display.fillRect(0, 0, 128, 1);
   display.fillRect(128 - battery_RA.getAverage(), 0, 128, 4);
 
 }
 
 void setup() {
-  SerialDebug.begin(115200);
 
-  SerialDebug.println("/************************************");
-  SerialDebug.println(" * DIY_Rower BLE Module ");
-  SerialDebug.print  (" * Version ");
-  SerialDebug.println(_VERSION);
-  SerialDebug.println(" ***********************************/");
-  
   // Start the OLED Display
   display.init();
   display.setFont(ArialMT_Plain_16);
@@ -811,6 +815,13 @@ void setup() {
   display.setTextAlignment(TEXT_ALIGN_CENTER);
   display.drawString(64, 4, "ArduRower");
   display.display();
+
+  SerialDebug.begin(115200);
+  SerialDebug.println("/************************************");
+  SerialDebug.println(" * DIY_Rower BLE Module ");
+  SerialDebug.print  (" * Version ");
+  SerialDebug.println(_VERSION);
+  SerialDebug.println(" ***********************************/");
 
   /*
   esp_bt_controller_config_t bt_cfg = BT_CONTROLLER_INIT_CONFIG_DEFAULT();
@@ -856,7 +867,6 @@ void rowing() {
       timer2 = millis();
       if ((millis() - timer2) >= 1000) {
         split();
-        //lcd.clear();
       }
     }
     
@@ -878,21 +888,6 @@ void rowing() {
       }
 
       if (deviceConnected) {        //** Send a value to protopie. The value is in txValue **//
-        //Why coxswain need this notify for start???
-        char cRower[3];
-        cRower[0]=0x01;
-        cRower[1]=0x00;
-        cRower[2]=0x00;
-        pDtCharacteristic->setValue((uint8_t* )cRower, 3);
-        pDtCharacteristic->notify();
-                
-        //cRower[0]=0x04;
-        //pStCharacteristic->setValue((uint8_t* )cRower, 1);
-        //pStCharacteristic->notify();
-
-        SerialDebug.println("Send data " + String(rdKpi.strokeCount));
-        setCxBattery();
-        delay(10);
 
         long sec = 1000 * (millis() - start);
         rdKpi.strokeRate = (int)round(spm + old_spm);
@@ -909,6 +904,19 @@ void rowing() {
         setCxRowerData();
         //setCxLightRowerData();
         //delay(500); // bluetooth stack will go into congestion, if too many packets are sent
+        SerialDebug.println("Send data " + String(rdKpi.strokeCount));
+
+        delay(10);
+        setCxBattery();
+
+        //Why coxswain need this notify for start???
+        char cRower[3];
+        cRower[0]=0x01;
+        cRower[1]=0x00;
+        cRower[2]=0x00;
+        pDtCharacteristic->setValue((uint8_t* )cRower, 3);
+        pDtCharacteristic->notify();
+
       }
  
       // disconnecting
@@ -917,8 +925,16 @@ void rowing() {
         pServer->startAdvertising(); // restart advertising
         SerialDebug.println("start advertising");
         oldDeviceConnected = deviceConnected;
-        clicks = 0;
-        break;
+        resetTimer = 21;
+      }
+
+      if (resetTimer > 0) {
+        if (resetTimer == 1) {
+          resetTimer = 0;
+          clicks = 0;
+          break;
+        }
+        resetTimer = resetTimer - 1;
       }
 
       //battery 3.2 - 4.2V
@@ -939,7 +955,7 @@ void rowing() {
     display.drawString(102, 53, "st/min"); 
 
     // set time display
-    displayTime();
+    displayTimeBattery();
 
     display.setFont(Roboto_Slab_Bold_27);
     display.setTextAlignment(TEXT_ALIGN_RIGHT);
